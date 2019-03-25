@@ -1,0 +1,27 @@
+---
+obs:
+  username: "lcavajani:test"
+  api: "https://api.suse.de"
+  #osc_rcfile: "/home/nobody/.oscrc"
+  project: "SUSE:SLE-12-SP3:Update:Products:CASP30:Update"
+  velum_image_name: "sles12sp3-velum-image"
+  local_work_dir: ".workdir"
+
+# Repositories which will be used when
+# getting PRs by the labels
+github:
+  labels: ["needs qa", "needs QA"]
+#  repositories:
+#    - owner: "SUSE"
+#      name: "kubic-salt-security-fixes"
+#    - owner: "SUSE"
+#      name: "kubic-velum-security-fixes"
+
+# Standalone pull requests, labels are ignored
+  pull_requests:
+    - repo_owner: "SUSE"
+      repo_name: "kubic-salt-security-fixes"
+      number: 12
+#    - repo_owner: "SUSE"
+#      repo_name: "kubic-salt-security-fixes"
+#      number: 12
