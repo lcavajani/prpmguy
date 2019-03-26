@@ -48,6 +48,29 @@ Example:
 ./prpmguy.py --oscrc-file /home/ci/.config/osc/oscrc --show-osc-commands
 ```
 
+# Podman
+
+**Build**
+
+```console
+sudo podman build -t prpmguy .
+```
+
+**Run**
+
+Must be mounted in the container:
+* environement var: $GITHUB_TOKEN
+* mounted: configuration file
+* mounted: oscrc file
+
+```console
+sudo podman run -ti --rm --env GITHUB_TOKEN=$GITHUB_TOKEN \
+    -v "$(pwd)"/prpmguy.yaml:/app/prpmguy.yaml \
+    -v "$(pwd)"/oscrc:/app/oscrc \
+    rpmguy \
+    --oscrc-file /app/oscrc
+```
+
 ## Configuration example
 
 **Create RPMs for both PRs by labels and standalone PRs**
