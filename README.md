@@ -1,9 +1,9 @@
-# PRPRMguy
+# PRPMguy
 
 The main purpose of this script is to create RPMs from Github PRs.
 The PRs can be retrieved in two ways:
-* By labels
-* By their unique number
+* by labels
+* by their unique number
 
 It is based on the [script](https://gitlab.suse.de/docker/automation/blob/master/scripts/create_project_from_pr.py) created by Jordi. 
 
