@@ -9,6 +9,7 @@ import subprocess
 import sys
 import yaml
 
+from collections import defaultdict
 
 def parse_args():
     """ Parse command line arguments """
@@ -42,7 +43,38 @@ def load_yaml(yaml_file):
         sys.exit()
 
 
+class Report(object):
+    """ Show a quick yaml report at the end of a run """
+    def __init__(self):
+        self.report = defaultdict(list)
+
+    def add_to_report(self, pr, status, message=None):
+        output = pr.me
+        output.pop("patch")
+        output.pop("patch_url")
+        output.pop("number")
+        output["url"] = pr.me["url"]
+
+        if message:
+            output["message"] = message
+
+        self.report[status].append(output)
+        
+    def print_report(self):
+        print("-------\nReports\n-------")
+        print(yaml.dump(dict(self.report), default_flow_style=False))
+
+
 def write_file(path, content, mode):
+    """Write string or binary to file
+
+    Parameters
+    ----------
+    path : str
+    content : bytes|str
+    mode : str
+        Can be "wb" for bytes or "w" for strings.
+    """
     try:
         with open(path, mode) as f:
             f.write(content)
@@ -51,6 +83,14 @@ def write_file(path, content, mode):
 
 
 class GithubQl(object):
+    """This class is used to run GraphQL query
+    against Github API.
+
+    Parameters
+    ----------
+    token : str
+        Github token for authentication
+    """
     token = None
     headers = None
 
@@ -78,6 +118,7 @@ class GithubQl(object):
             sys.exit()
 
     def __retrieve_pr_patch(self, url):
+        """ Return patch in bytes """
         try:
             headers = self.headers
             headers["Accept"] = "application/vnd.github.VERSION.patch"
@@ -89,6 +130,24 @@ class GithubQl(object):
             sys.exit()
 
     def retrieve_pr_by_number(self, repo_name, repo_owner, number):
+        """Retrieve a single PR by its number.
+
+        Returns
+        -------
+        dict
+            Return the following or None. The dict is then enrich
+            with patch_url, patch, repo_owner, repo_name  by `__add_data_pr`
+            {
+              'title': 'PR title',
+              'number': 1,
+              'url': 'https://github.com/OWNER/NAME/pull/1',
+              'patch_url': 'https://api.github.com/repos/OWNER/NAME/pulls/1',
+              'patch': b'PATCH',
+              'repo_owner': 'OWNER',
+              'repo_name': 'kNAME'
+            }
+        """
+
         query = """
         query($repo_owner: String!, $repo_name: String!, $number: Int!) {
           repository(owner: $repo_owner, name: $repo_name) {
@@ -115,6 +174,33 @@ class GithubQl(object):
         return pr
 
     def retrieve_prs_by_label(self, repo_name, repo_owner, labels):
+        """Retrieve several PRs by their labels.
+
+        Returns
+        -------
+        list
+            Return the following or None. The dict inside the list are then
+            enrich with patch_url, patch, repo_owner, repo_name  by `__add_data_pr`
+            [{
+              'title': 'PR title',
+              'number': 1,
+              'url': 'https://github.com/OWNER/NAME/pull/1',
+              'patch_url': 'https://api.github.com/repos/OWNER/NAME/pulls/1',
+              'patch': b'PATCH',
+              'repo_owner': 'OWNER',
+              'repo_name': 'kNAME'
+            },
+            {
+              'title': 'PR title',
+              'number': 2,
+              'url': 'https://github.com/OWNER/NAME/pull/2',
+              'patch_url': 'https://api.github.com/repos/OWNER/NAME/pulls/2',
+              'patch': b'PATCH',
+              'repo_owner': 'OWNER',
+              'repo_name': 'kNAME'
+            }]
+        """
+
         query = """
         query($repo_owner: String!, $repo_name: String!, $labels: [String!]) {
           repository(owner: $repo_owner, name: $repo_name) {
@@ -152,6 +238,8 @@ class GithubQl(object):
         return prs_clean
 
     def __add_data_pr(self, pr, repo_name, repo_owner):
+        """ Enrich PR dict with patch_url, patch, repo_owner, repo_name """
+
         patch_url = "https://api.github.com/repos/{0}/{1}/pulls/{2}".format(
                     repo_owner, repo_name, pr["number"])
         pr["patch_url"] = patch_url
@@ -163,6 +251,10 @@ class GithubQl(object):
 
 
 class PullRequest(object):
+    """This class is used to make easier the use
+    of PR properties in the class `Osc`
+    """
+
     def __init__(self, pr):
         self.pr = pr
 
@@ -173,6 +265,10 @@ class PullRequest(object):
         bsc = list(set(bsc))
         bsc.sort()
         return bsc
+
+    @property
+    def me(self):
+        return self.pr
 
     @property
     def number(self):
@@ -218,6 +314,17 @@ class PullRequest(object):
 
 
 class Osc(object):
+    """This class is used to run osc commands in
+    order to create the RPMs.
+
+    Parameters
+    ----------
+    pr : dict
+        Pull Request
+    obs_conf : dict
+        OBS Configuration
+    """
+
     def __init__(self, pr, obs_conf):
         self.pr = pr
         self.api = obs_conf["api"]
@@ -231,14 +338,20 @@ class Osc(object):
         self.pr_project_name = self.__pr_project_name()
 
     def osc(self, *args, **kwargs):
+        """ Command line, shell out to osc """
+
         options = list(args)
+
+        # `-c /path/to/rcfile` must be at the beginning
         if self.osc_rcfile:
             options.insert(0, "-c {}".format(self.osc_rcfile))
 
+        # Build arguments
         options = " ".join(options)
         cmd = "/usr/bin/osc -A {0} {1}".format(self.api,
                                                options)
 
+        # Show the commands which are executed
         if self.show_osc_commands:
             logging.info(cmd)
 
@@ -294,7 +407,9 @@ class Osc(object):
         self.osc("vc -m", "'Fix bsc# {0} in {1}'".format(bsc,
                                                          self.pr.package_name))
 
-    def patch_package(self):
+    def add_patch_in_package(self):
+        """ Add patch to the package """
+
         logging.info("Patching package: " + self.local_package_path)
 
         if not os.path.exists(self.local_package_path):
@@ -315,13 +430,15 @@ class Osc(object):
         for bsc in self.pr.bscs:
             self.__add_bsc_entry(bsc)
 
-    def add_patch(self):
+    def add_patch_in_package_spec(self):
+        """ Add patch in the spec file of the package """
+
         spec_file_name = self.pr.package_name + ".spec"
         spec_file_path = os.path.join(self.local_package_path,
                                       spec_file_name)
 
-        patch_text = "Patch {0}: {1} \n".format(self.pr.number,
-                                                self.pr.patch_url)
+        patch_text = "Patch{0}: {1} \n".format(self.pr.number,
+                                               self.pr.patch_name)
         patching_text = "patch -p1 --no-backup-if-mismatch < %{{P:{0}}}\n".format(self.pr.number)
 
         logging.info("Adding {0} in {1} file".format(patch_text, spec_file_name))
@@ -342,17 +459,24 @@ class Osc(object):
                 text += line
 
         if not patch_added or not patching_added:
-            logging.error("Something went wrong adding the patch into the spec file")
+            message = "Something went wrong adding the patch into the spec file"
+            logging.error(message)
+            report.add_to_report(self.pr, status="failed",
+                                 message="ERROR: {}".format(message))
         else:
             write_file(spec_file_path, text, "w")
 
         logging.info("Uploading to the repository server")
         self.osc("commit -m", self.pr.link, cwd=self.local_package_path)
 
+        logging.info("Success\n")
+
 
 def main():
+    # Default loglevel
     logging.basicConfig(level=logging.INFO)
 
+    # Parse args and build configuration
     args = parse_args()
 
     conf = load_yaml(args.conf_file)
@@ -364,11 +488,11 @@ def main():
 
     obs_conf["show_osc_commands"] = args.show_osc_commands
 
-    # Create working directory where the packages will
-    # be checked out
     local_work_dir = os.path.abspath(conf["obs"]["local_work_dir"])
     obs_conf["local_work_dir"] = local_work_dir
 
+    # Create working directory where the packages will
+    # be checked out
     if not os.path.exists(local_work_dir):
         os.makedirs(local_work_dir)
 
@@ -378,15 +502,18 @@ def main():
     else:
         GITHUB_TOKEN = None
 
+    # Create client to run GraphQL queries
     client = GithubQl(token=GITHUB_TOKEN)
-
+    report = Report()
     prs = []
+    # Retrieve PRs by label
     if gh_conf.get("repositories", None):
         for r in gh_conf["repositories"]:
             prs += client.retrieve_prs_by_label(repo_owner=r["owner"],
                                                 repo_name=r["name"],
                                                 labels=gh_conf["labels"])
 
+    # Retrieve PRs by number
     if gh_conf.get("pull_requests", None):
         for r in gh_conf["pull_requests"]:
             prs.append(client.retrieve_pr_by_number(repo_owner=r["repo_owner"],
@@ -400,12 +527,16 @@ def main():
             if not pr.bscs:
                 logging.warning("Can not build RPM for PR: {0}".format(pr.link))
                 logging.warning("BSC is missing")
+                report.add_to_report(pr, status="failed",
+                                     message="BSC is missing")
                 continue
             osc = Osc(pr, obs_conf)
             osc.branch_package()
-            osc.patch_package()
-            osc.add_patch()
+            osc.add_patch_in_package()
+            osc.add_patch_in_package_spec()
+            report.add_to_report(pr, status="success")
 
+    report.print_report()
 
 if __name__ == "__main__":
     main()
