@@ -71,6 +71,40 @@ sudo podman run -ti --rm --env GITHUB_TOKEN=$GITHUB_TOKEN \
     --oscrc-file /app/oscrc
 ```
 
+# Kubernetes
+
+**containersbuild oscrc**
+
+```
+[general]
+apiurl = https://api.suse.de
+cookiejar = /app/.osc_cookiejar
+
+[https://api.suse.de]
+user = containersbuild
+pass =
+```
+
+Encode the secrets with `base64 | tr -d '\n'`
+
+```yaml
+apiVersion: v1
+data:
+  GITHUB_TOKEN: GITHUB_TOKEN IN BASE64
+  oscrc.containersbuild: OSCRC IN BASE64
+kind: Secret
+metadata:
+  name: prpmguy-secrets
+  namespace: default
+type: Opaque
+```
+
+Create the `CronJob` and the `ConfigMap`:
+
+```console
+kubectl create -f ./kubernetes/cronjob-cm.yaml
+```
+
 ## Configuration example
 
 **Create RPMs for both PRs by labels and standalone PRs**
