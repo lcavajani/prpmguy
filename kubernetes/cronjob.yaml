@@ -1,0 +1,75 @@
+---
+apiVersion: batch/v1beta1
+kind: CronJob
+metadata:
+  name: prpmguy
+  namespace: default
+spec:
+  schedule: "*/1 * * * *"
+  jobTemplate:
+    spec:
+      template:
+        spec:
+          containers:
+          - name: prpmguy
+            image: registry.suse.de/home/lcavajani/branches/opensuse.org/opensuse/templates/images/15.0/containers/prpmguy:latest
+            #image: alpine:latest
+            args: ["sleep", "3600"]
+            env:
+              - name: CONF_FILE
+                valueFrom:
+                  configMapKeyRef:
+                    name: prpmguy-conf
+                    key: conf_file_path
+              - name: OSCRC_FILE
+                valueFrom:
+                  configMapKeyRef:
+                    name: prpmguy-conf
+                    key: oscrc_file_path
+              - name: GITHUB_TOKEN
+                valueFrom:
+                  secretKeyRef:
+                    name: prpmguy-secrets
+                    key: GITHUB_TOKEN
+            volumeMounts:
+            - name: prpmguy-conf
+              mountPath: /app/conf
+              readOnly: True
+            - name: prpmguy-secrets
+              mountPath: /app/secrets
+              readOnly: False
+          restartPolicy: OnFailure
+          volumes:
+          - name: prpmguy-conf
+            configMap:
+              name: prpmguy-conf
+          - name: prpmguy-secrets
+            secret:
+              secretName: prpmguy-secrets
+---
+kind: ConfigMap
+apiVersion: v1
+metadata:
+  name: prpmguy-conf
+  namespace: default
+data:
+  conf_file_path: "/app/conf/prpmguy.containersbuild.yaml"
+  oscrc_file_path: "/app/secrets/oscrc.containersbuild"
+  prpmguy.containersbuild.yaml: |
+    ---
+    obs:
+      username: "lcavajani"
+      api: "https://api.suse.de"
+      project: "SUSE:SLE-12-SP3:Update:Products:CASP30:Update"
+      velum_image_name: "sles12sp3-velum-image"
+      local_work_dir: ".workdir"
+
+    # Repositories which will be used when
+    # getting PRs by the labels
+    github:
+      labels: ["needs qa", "needs QA"]
+      repositories:
+        - owner: "SUSE"
+          name: "kubic-salt-security-fixes"
+        - owner: "SUSE"
+          name: "kubic-velum-security-fixes"
