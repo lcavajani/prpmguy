@@ -360,7 +360,7 @@ class Osc(object):
 
     def __pr_project_name(self):
         """ home:user:bsc_1234567 """
-        pr_project = "home:" + self.username + ":bsc"
+        pr_project = "home:" + self.username + ":test:bsc"
         for bsc in self.pr.bscs:
             pr_project += "_" + bsc
         return pr_project

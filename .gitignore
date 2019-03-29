@@ -1,3 +1,5 @@
 .workdir
-oscrc
-.tmp/
+oscrc*
+*.bak
+*.perso*
+prpmguy.(!yaml)
