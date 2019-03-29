@@ -4,3 +4,4 @@ oscrc*
 *.perso*
 prpmguy.containersbuild.*
 secrets*
+*kubeconfig*
