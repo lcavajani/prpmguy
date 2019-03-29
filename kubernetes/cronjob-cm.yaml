@@ -5,7 +5,7 @@ metadata:
   name: prpmguy
   namespace: default
 spec:
-  schedule: "*/1 * * * *"
+  schedule: "*/60 * * * *"
   jobTemplate:
     spec:
       template:
@@ -13,8 +13,6 @@ spec:
           containers:
           - name: prpmguy
             image: registry.suse.de/home/lcavajani/branches/opensuse.org/opensuse/templates/images/15.0/containers/prpmguy:latest
-            #image: alpine:latest
-            args: ["sleep", "3600"]
             env:
               - name: CONF_FILE
                 valueFrom:
@@ -58,7 +56,7 @@ data:
   prpmguy.containersbuild.yaml: |
     ---
     obs:
-      username: "lcavajani"
+      username: "containersbuild"
       api: "https://api.suse.de"
       project: "SUSE:SLE-12-SP3:Update:Products:CASP30:Update"
       velum_image_name: "sles12sp3-velum-image"
