@@ -429,7 +429,7 @@ class Osc(object):
         """ Check out package locally """
 
         if not os.path.exists(self.local_package_path):
-            logging.info("Cheking out")
+            logging.info("Checking out")
             self.osc("checkout",
                      self.pr_project_name,
                      "-o", self.local_project_path)
@@ -576,7 +576,7 @@ def main():
             osc.add_patch_in_package_spec_changes()
             osc.commit_package()
 
-    osc.report.print_report()
+        osc.report.print_report()
 
 
 if __name__ == "__main__":
