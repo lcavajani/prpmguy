@@ -5,7 +5,7 @@ metadata:
   name: prpmguy
   namespace: default
 spec:
-  schedule: "*/60 * * * *"
+  schedule: "*/30 8-19 * * 1-5"
   jobTemplate:
     spec:
       template:
