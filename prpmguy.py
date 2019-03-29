@@ -62,7 +62,7 @@ class Report(object):
         self.report[status].append(output)
 
     def print_report(self):
-        print("-------\nReports\n-------")
+        print("\n-------\nReports\n-------")
         print(yaml.dump(dict(self.report), default_flow_style=False))
 
 
@@ -326,7 +326,7 @@ class Osc(object):
         OBS Configuration
     """
 
-    def __init__(self, pr, obs_conf):
+    def __init__(self, pr, obs_conf, report):
         self.pr = pr
         self.api = obs_conf["api"]
         self.username = obs_conf["username"]
@@ -335,7 +335,8 @@ class Osc(object):
         self.velum_image_name = obs_conf["velum_image_name"]
         self.show_osc_commands = obs_conf["show_osc_commands"]
 
-        self.report = Report()
+        #self.report = Report()
+        self.report = report
 
         self.work_dir = obs_conf["local_work_dir"]
         self.pr_project_name = self.__pr_project_name()
@@ -540,6 +541,8 @@ def main():
     # Create client to run GraphQL queries
     client = GithubQl(token=GITHUB_TOKEN)
 
+    report = Report()
+
     prs = []
     # Retrieve PRs by label
     if gh_conf.get("repositories", None):
@@ -559,7 +562,7 @@ def main():
         for pr in prs:
             print("================================")
             pr = PullRequest(pr)
-            osc = Osc(pr, obs_conf)
+            osc = Osc(pr, obs_conf, report)
             if not pr.bscs:
                 logging.warning("Can not build RPM for PR: {0}".format(pr.link))
                 logging.warning("BSC is missing")
