@@ -11,6 +11,7 @@ import yaml
 
 from collections import defaultdict
 
+
 def parse_args():
     """ Parse command line arguments """
     parser = argparse.ArgumentParser(description="Create RPMs from Github PRs.")
@@ -59,7 +60,7 @@ class Report(object):
             output["message"] = message
 
         self.report[status].append(output)
-        
+
     def print_report(self):
         print("-------\nReports\n-------")
         print(yaml.dump(dict(self.report), default_flow_style=False))
@@ -334,11 +335,19 @@ class Osc(object):
         self.velum_image_name = obs_conf["velum_image_name"]
         self.show_osc_commands = obs_conf["show_osc_commands"]
 
+        self.report = Report()
+
         self.work_dir = obs_conf["local_work_dir"]
         self.pr_project_name = self.__pr_project_name()
 
     def osc(self, *args, **kwargs):
         """ Command line, shell out to osc """
+
+        # check retcode by default unless explicitly set
+        if not kwargs.get("check", None):
+            kwargs['check'] = False
+        else:
+            kwargs['check'] = True
 
         options = list(args)
 
@@ -355,8 +364,7 @@ class Osc(object):
         if self.show_osc_commands:
             logging.info(cmd)
 
-        subprocess.run(cmd, shell=True, **kwargs)
-        print("")
+        return subprocess.run(cmd, shell=True, **kwargs)
 
     def __pr_project_name(self):
         """ home:user:bsc_1234567 """
@@ -375,6 +383,15 @@ class Osc(object):
         """ home:user:bsc_1234567/package-name """
         return os.path.join(self.work_dir, self.pr_project_name, self.pr.package_name)
 
+    def __package_has_changes(self):
+        """Find changes in package by making a diff
+        Returns true if there is a diff
+        """
+        diff = self.osc("diff",
+                        cwd=self.local_package_path,
+                        stdout=subprocess.PIPE)
+        return diff.stdout
+
     def branch_package(self):
         """ Branch package on OBS """
         logging.info("Branching {0} {1} {2}".format(self.source_project,
@@ -385,7 +402,7 @@ class Osc(object):
                  self.source_project,
                  self.pr.package_name,
                  self.pr_project_name,
-                 "--force")
+                 check=False)
 
         if self.pr.package_name == "velum":
             logging.info("Branching also {0}".format(self.velum_image_name))
@@ -404,13 +421,11 @@ class Osc(object):
     def __add_bsc_entry(self, bsc):
         logging.info("Adding entry about Fixing bsc#{0} in {1}.changes".format(bsc,
                                                                                self.pr.package_name))
-        self.osc("vc -m", "'Fix bsc# {0} in {1}'".format(bsc,
-                                                         self.pr.package_name))
+        self.osc("vc -m", "'Fix bsc# {0} in {1}'".format(bsc, self.pr.package_name),
+                 cwd=self.local_package_path)
 
-    def add_patch_in_package(self):
-        """ Add patch to the package """
-
-        logging.info("Patching package: " + self.local_package_path)
+    def check_out_package(self):
+        """ Check out package locally """
 
         if not os.path.exists(self.local_package_path):
             logging.info("Cheking out")
@@ -421,17 +436,17 @@ class Osc(object):
         logging.info("Updating working copy")
         self.osc("update", cwd=self.local_package_path)
 
+    def add_patch_in_package(self):
+        """ Add patch to the package """
         # Write patch in package directory
+        logging.info("Writing patch in package directory")
         patch_path = os.path.join(self.local_package_path, self.pr.patch_name)
         write_file(patch_path, self.pr.patch, "wb")
 
-        logging.info("Marking patch to be added upon the next commit")
-        self.osc("add", self.pr.patch_name, cwd=self.local_package_path)
-        for bsc in self.pr.bscs:
-            self.__add_bsc_entry(bsc)
-
-    def add_patch_in_package_spec(self):
+    def add_patch_in_package_spec_changes(self):
         """ Add patch in the spec file of the package """
+
+        logging.info("Patching package: " + self.local_package_path)
 
         spec_file_name = self.pr.package_name + ".spec"
         spec_file_path = os.path.join(self.local_package_path,
@@ -441,35 +456,55 @@ class Osc(object):
                                                self.pr.patch_name)
         patching_text = "patch -p1 --no-backup-if-mismatch < %{{P:{0}}}\n".format(self.pr.number)
 
-        logging.info("Adding {0} in {1} file".format(patch_text, spec_file_name))
-        logging.info("Adding {0}".format(patching_text))
-
         text, previous_line = "", ""
         patch_added, patching_added = False, False
 
         with open(spec_file_path, "r") as f:
-            for line in f:
-                if previous_line.startswith("Source:"):
-                    text += patch_text
-                    patch_added = True
-                elif previous_line.startswith("%setup"):
-                    text += patching_text
-                    patching_added = True
-                previous_line = line
-                text += line
+            try:
+                for line in f:
+                    if patch_text not in line:
+                        if previous_line.startswith("Source:"):
+                            logging.info("Adding {0} in {1} file".format(patch_text,
+                                                                         spec_file_name))
+                            text += patch_text
+                            patch_added = True
+                    if patching_text not in line:
+                        if previous_line.startswith("%setup"):
+                            logging.info("Adding {0}".format(patching_text))
+                            text += patching_text
+                            patching_added = True
+                    previous_line = line
+                    text += line
 
-        if not patch_added or not patching_added:
-            message = "Something went wrong adding the patch into the spec file"
-            logging.error(message)
-            report.add_to_report(self.pr, status="failed",
-                                 message="ERROR: {}".format(message))
+                if patch_added or patching_added:
+                    write_file(spec_file_path, text, "w")
+
+                    logging.info("Marking patch to be added upon the next commit")
+                    self.osc("add", self.pr.patch_name, cwd=self.local_package_path)
+                    for bsc in self.pr.bscs:
+                        self.__add_bsc_entry(bsc)
+            except Exception as e:
+                message = "Something went wrong adding the patch into the spec file"
+                logging.error(message + e)
+                self.report.add_to_report(self.pr,
+                                          status="failed",
+                                          message="ERROR: {}".format(message))
+
+    def commit_package(self):
+        if self.__package_has_changes():
+            logging.info("Uploading to the repository server")
+            self.osc("commit -m", self.pr.link, cwd=self.local_package_path)
+
+            self.report.add_to_report(self.pr,
+                                      status="success",
+                                      message="Changes uploaded")
+
+            logging.info("Success\n")
         else:
-            write_file(spec_file_path, text, "w")
-
-        logging.info("Uploading to the repository server")
-        self.osc("commit -m", self.pr.link, cwd=self.local_package_path)
-
-        logging.info("Success\n")
+            logging.info("No changes found, nothing to do\nSuccess")
+            self.report.add_to_report(self.pr,
+                                      status="success",
+                                      message="No changes found")
 
 
 def main():
@@ -504,7 +539,7 @@ def main():
 
     # Create client to run GraphQL queries
     client = GithubQl(token=GITHUB_TOKEN)
-    report = Report()
+
     prs = []
     # Retrieve PRs by label
     if gh_conf.get("repositories", None):
@@ -524,19 +559,21 @@ def main():
         for pr in prs:
             print("================================")
             pr = PullRequest(pr)
+            osc = Osc(pr, obs_conf)
             if not pr.bscs:
                 logging.warning("Can not build RPM for PR: {0}".format(pr.link))
                 logging.warning("BSC is missing")
-                report.add_to_report(pr, status="failed",
-                                     message="BSC is missing")
+                osc.report.add_to_report(pr, status="failed",
+                                         message="BSC is missing")
                 continue
-            osc = Osc(pr, obs_conf)
             osc.branch_package()
+            osc.check_out_package()
             osc.add_patch_in_package()
-            osc.add_patch_in_package_spec()
-            report.add_to_report(pr, status="success")
+            osc.add_patch_in_package_spec_changes()
+            osc.commit_package()
 
-    report.print_report()
+    osc.report.print_report()
+
 
 if __name__ == "__main__":
     main()
