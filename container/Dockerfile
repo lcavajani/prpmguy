@@ -1,7 +1,7 @@
 FROM opensuse/leap
 
 RUN zypper ref && \
-    zypper -n in python3 python3-PyYAML python3-requests osc && \
+    zypper -n in python3 python3-PyYAML python3-requests osc build && \
     zypper clean -a
 
 ADD SUSE_Trust_Root.crt.pem /etc/pki/trust/anchors/
