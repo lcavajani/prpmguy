@@ -541,6 +541,7 @@ def main():
     # Create client to run GraphQL queries
     client = GithubQl(token=GITHUB_TOKEN)
 
+    # Create report client
     report = Report()
 
     prs = []
