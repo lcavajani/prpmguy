@@ -35,7 +35,7 @@ spec:
               readOnly: True
             - name: prpmguy-secrets
               mountPath: /app/secrets
-              readOnly: False
+              readOnly: True
           restartPolicy: OnFailure
           volumes:
           - name: prpmguy-conf
