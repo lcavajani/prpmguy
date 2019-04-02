@@ -71,7 +71,16 @@ sudo podman run -ti --rm --env GITHUB_TOKEN=$GITHUB_TOKEN \
     --oscrc-file /app/oscrc
 ```
 
+# OBS container image
+
+The container image leaves [here](https://build.suse.de/package/show/home:containersbuild:branches:openSUSE.org:openSUSE:Templates:Images:15.0/prpmguy)
+in `containersbuild` home.
+
 # Kubernetes
+
+**github token**
+
+use `caaspjenkins` github token
 
 **containersbuild oscrc**
 
