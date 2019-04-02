@@ -12,7 +12,7 @@ spec:
         spec:
           containers:
           - name: prpmguy
-            image: registry.suse.de/home/lcavajani/branches/opensuse.org/opensuse/templates/images/15.0/containers/prpmguy:latest
+            image: registry.suse.de/home/containersbuild/branches/opensuse.org/opensuse/templates/images/15.0/containers/prpmguy:latest
             env:
               - name: CONF_FILE
                 valueFrom:
