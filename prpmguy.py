@@ -335,11 +335,10 @@ class Osc(object):
         self.velum_image_name = obs_conf["velum_image_name"]
         self.show_osc_commands = obs_conf["show_osc_commands"]
 
-        #self.report = Report()
         self.report = report
 
         self.work_dir = obs_conf["local_work_dir"]
-        self.pr_project_name = self.__pr_project_name()
+        self.project_name = self.__project_name()
 
     def osc(self, *args, **kwargs):
         """ Command line, shell out to osc """
@@ -367,7 +366,7 @@ class Osc(object):
 
         return subprocess.run(cmd, shell=True, **kwargs)
 
-    def __pr_project_name(self):
+    def __project_name(self):
         """ home:user:bsc_1234567 """
         pr_project = "home:" + self.username + ":test:bsc"
         for bsc in self.pr.bscs:
@@ -377,12 +376,12 @@ class Osc(object):
     @property
     def local_project_path(self):
         """ /workdir/home:user:bsc_1234567 """
-        return os.path.join(self.work_dir, self.pr_project_name)
+        return os.path.join(self.work_dir, self.project_name)
 
     @property
     def local_package_path(self):
-        """ home:user:bsc_1234567/package-name """
-        return os.path.join(self.work_dir, self.pr_project_name, self.pr.package_name)
+        """ /workdir/home:user:bsc_1234567/package-name """
+        return os.path.join(self.work_dir, self.project_name, self.pr.package_name)
 
     def __package_has_changes(self):
         """Find changes in package by making a diff
@@ -397,12 +396,12 @@ class Osc(object):
         """ Branch package on OBS """
         logging.info("Branching {0} {1} {2}".format(self.source_project,
                                                     self.pr.package_name,
-                                                    self.pr_project_name))
+                                                    self.project_name))
 
         self.osc("branch",
                  self.source_project,
                  self.pr.package_name,
-                 self.pr_project_name,
+                 self.project_name,
                  check=False)
 
         if self.pr.package_name == "velum":
@@ -410,13 +409,13 @@ class Osc(object):
             self.osc("branch",
                      self.source_project,
                      self.velum_image_name,
-                     self.pr_project_name)
+                     self.project_name)
 
             logging.info("Aggregating image binaries")
             self.osc("aggregatepac -m containers=standard",
-                     self.pr_project_name,
+                     self.project_name,
                      self.velum_image_name,
-                     self.pr_project_name,
+                     self.project_name,
                      "aggregates")
 
     def __add_bsc_entry(self, bsc):
@@ -431,7 +430,7 @@ class Osc(object):
         if not os.path.exists(self.local_package_path):
             logging.info("Checking out")
             self.osc("checkout",
-                     self.pr_project_name,
+                     self.project_name,
                      "-o", self.local_project_path)
 
         logging.info("Updating working copy")
@@ -554,10 +553,10 @@ def main():
 
     # Retrieve PRs by number
     if gh_conf.get("pull_requests", None):
-        for r in gh_conf["pull_requests"]:
-            prs.append(client.retrieve_pr_by_number(repo_owner=r["repo_owner"],
-                                                    repo_name=r["repo_name"],
-                                                    number=r["number"]))
+        for pr in gh_conf["pull_requests"]:
+            prs.append(client.retrieve_pr_by_number(repo_owner=pr["repo_owner"],
+                                                    repo_name=pr["repo_name"],
+                                                    number=pr["number"]))
 
     if prs is not None:
         for pr in prs:
